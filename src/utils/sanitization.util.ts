@@ -215,15 +215,6 @@ export const defaultChatSanitizePipeline = createSanitizePipeline([
     return content;
   },
   (content) => content.replace(/\s+on\w+\s*=\s*(".*?"|'.*?'|[^\s>]*)/gi, ''),
-  (content) => {
-    // Check for suspicious patterns (mirrors original sanitizeChatContent behavior)
-    const containsOnlyEncodedText = /^(\\u[0-9A-Fa-f]{4}|\\x[0-9A-Fa-f]{2}|%[0-9A-Fa-f]{2}|[A-Za-z0-9()\\/\s.])+$/i.test(content);
-    const hasExcessiveRepetition = /(.)\1{4,}/i.test(content);
-    if (isSuspiciousContent(content) && (!containsOnlyEncodedText || hasExcessiveRepetition)) {
-      throw new Error('Content contains suspicious patterns or potential injection attempts');
-    }
-    return content;
-  },
   escapeHtml,
 ]);
 
@@ -248,15 +239,6 @@ export const defaultChatSanitizeHooks: SanitizeHook[] = [
     return content;
   },
   (content) => content.replace(/\s+on\w+\s*=\s*(".*?"|'.*?'|[^\s>]*)/gi, ''),
-  (content) => {
-    // Check for suspicious patterns (mirrors original sanitizeChatContent behavior)
-    const containsOnlyEncodedText = /^(\\u[0-9A-Fa-f]{4}|\\x[0-9A-Fa-f]{2}|%[0-9A-Fa-f]{2}|[A-Za-z0-9()\\/\s.])+$/i.test(content);
-    const hasExcessiveRepetition = /(.)\1{4,}/i.test(content);
-    if (isSuspiciousContent(content) && (!containsOnlyEncodedText || hasExcessiveRepetition)) {
-      throw new Error('Content contains suspicious patterns or potential injection attempts');
-    }
-    return content;
-  },
   escapeHtml,
 ];
 

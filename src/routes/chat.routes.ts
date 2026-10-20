@@ -125,8 +125,6 @@ router.get('/history', validate(unifiedPaginationSchema, 'query'), async (req: R
       success: true,
       messages: result.data,
       pagination: buildUnifiedOffsetPagination(limit, offset, result.pagination.total),
-      // Legacy field kept for backward compatibility
-      count: result.data.length,
     });
   } catch (error) {
     next(error);

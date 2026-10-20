@@ -44,7 +44,7 @@ jest.mock('../lib/prisma', () => ({
 
 jest.mock('../services/soroban.service', () => ({
   __esModule: true,
-  default: { placeBet: jest.fn().mockResolvedValue(undefined) },
+  default: { placeBet: jest.fn().mockResolvedValue({ state: "on-chain-success", txHash: "test-tx-hash-123" }) },
 }));
 
 jest.mock('../lib/redis', () => ({
@@ -145,8 +145,9 @@ describe('PredictionService — outbox pattern (Issue #18)', () => {
       mockRoundUpdate.mockResolvedValue({});
 
       // Soroban fails → transaction rolls back → outboxCreate never called
-      const sorobanService = require('../services/soroban.service').default;
-      sorobanService.placeBet.mockRejectedValueOnce(new Error('Soroban down'));
+      // Access the mocked soroban service
+      const { default: sorobanService } = require('../services/soroban.service');
+      (sorobanService.placeBet as jest.Mock).mockRejectedValueOnce(new Error('Soroban down'));
 
       // The $transaction mock re-runs the fn; if placeBet throws, the fn throws
       // and the transaction mock propagates the error.

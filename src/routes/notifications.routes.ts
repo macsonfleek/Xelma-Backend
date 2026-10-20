@@ -5,6 +5,7 @@ import { NotFoundError } from "../utils/errors";
 import { validate } from "../middleware/validate.middleware";
 import { z } from "zod";
 import { unifiedPaginationSchema } from "../schemas/pagination.schema";
+import { buildUnifiedCursorPagination, buildUnifiedOffsetPagination } from "../utils/pagination.util";
 
 const router = Router();
 
@@ -76,7 +77,7 @@ router.get(
       };
 
       if (cursor) {
-        // Cursor mode
+        // Cursor mode (issue #340: unified pagination)
         const result = await notificationService.getUserNotificationsCursor(
           userId,
           limit,
@@ -86,11 +87,11 @@ router.get(
         return res.json({
           success: true,
           notifications: result.data,
-          pagination: result.pagination,
+          pagination: buildUnifiedCursorPagination(limit, result.pagination.nextCursor),
         });
       }
 
-      // Offset mode
+      // Offset mode (issue #340: unified pagination)
       const result = await notificationService.getUserNotificationsOffset(
         userId,
         limit,
@@ -100,11 +101,7 @@ router.get(
       return res.json({
         success: true,
         notifications: result.data,
-        pagination: result.pagination,
-        // Legacy fields kept for backward compatibility
-        total: result.pagination.total,
-        limit: result.pagination.limit,
-        offset: result.pagination.offset,
+        pagination: buildUnifiedOffsetPagination(limit, offset, result.pagination.total),
       });
     } catch (error) {
       next(error);

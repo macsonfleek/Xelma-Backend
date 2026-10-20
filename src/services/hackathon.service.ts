@@ -127,9 +127,9 @@ export class HackathonService {
           asset: r.asset,
           mode: r.mode,
           status: r.status,
-          startPrice: r.startPrice,
-          poolUp: r.poolUp,
-          poolDown: r.poolDown,
+          startPrice: toNumber(r.startPrice),
+          poolUp: toNumber(r.poolUp),
+          poolDown: toNumber(r.poolDown),
           closesAt: r.closesAt,
         };
       }
@@ -138,8 +138,8 @@ export class HackathonService {
         asset: r.asset,
         mode: r.mode,
         status: r.status,
-        startPrice: r.startPrice,
-        totalPool: r.totalPool,
+        startPrice: toNumber(r.startPrice),
+        totalPool: toNumber(r.totalPool),
         predictionCount: r.predictionCount,
         closesAt: r.closesAt,
       };
@@ -156,6 +156,9 @@ export class HackathonService {
       winStreak: u.winStreak,
       xp: u.xp,
       rankTitle: u.rankTitle,
+      // Include balance as string for Decimal serialization (issue #621)
+      balance: u.balance?.toString ? u.balance.toString() : String(u.balance),
+      pendingWinnings: u.pendingWinnings?.toString ? u.pendingWinnings.toString() : String(u.pendingWinnings),
     }));
   }
 
@@ -207,6 +210,10 @@ export class HackathonService {
     side?: 'UP' | 'DOWN',
     predictedPrice?: number,
   ): Promise<void> {
+    // Convert amounts to Decimal for precision-safe monetary operations (issue #621)
+    const decimalAmount = toDecimal(amount);
+    const decimalPredictedPrice = predictedPrice !== undefined ? toDecimal(predictedPrice) : undefined;
+
     await prisma.$transaction(async (tx) => {
       const existing = await tx.mockLeaderboard.findUnique({ where: { address } });
       if (!existing) {
@@ -225,36 +232,40 @@ export class HackathonService {
         });
       }
 
-      await tx.mockBet.create({
+      // Cast to any because the mock Prisma client expects number but the actual
+      // database now expects Decimal (issue #621). The mock handles both.
+      const mockAmount = toNumber(decimalAmount);
+      const mockPredictedPrice = decimalPredictedPrice ? toNumber(decimalPredictedPrice) : undefined;
+      await (tx as any).mockBet.create({
         data: {
           roundId,
           address,
-          amount,
+          amount: mockAmount,
           side,
-          predictedPrice,
+          predictedPrice: mockPredictedPrice,
         },
       });
 
-      await tx.mockLeaderboard.update({
+      await (tx as any).mockLeaderboard.update({
         where: { address },
-        data: { balance: { decrement: amount } },
+        data: { balance: { decrement: decimalAmount } },
       });
 
-      const round = await tx.mockRound.findUnique({ where: { id: roundId } });
+      const round = await (tx as any).mockRound.findUnique({ where: { id: roundId } });
       if (round) {
         if (round.mode === 'updown' && side) {
-          await tx.mockRound.update({
+          await (tx as any).mockRound.update({
             where: { id: roundId },
             data:
               side === 'UP'
-                ? { poolUp: { increment: amount } }
-                : { poolDown: { increment: amount } },
+                ? { poolUp: { increment: decimalAmount } }
+                : { poolDown: { increment: decimalAmount } },
           });
         } else if (round.mode === 'precision') {
-          await tx.mockRound.update({
+          await (tx as any).mockRound.update({
             where: { id: roundId },
             data: {
-              totalPool: { increment: amount },
+              totalPool: { increment: decimalAmount },
               predictionCount: { increment: 1 },
             },
           });

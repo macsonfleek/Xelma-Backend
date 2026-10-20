@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { MockRound, MockLeaderboard, MockPlatformStat } from '@prisma/client';
+import { toNumber, toDecimal } from '../utils/decimal.util';
+import { Decimal } from '@prisma/client/runtime/library';
 
 export class MockDataRepository {
   async getRounds(): Promise<MockRound[]> {
@@ -13,7 +15,9 @@ export class MockDataRepository {
   }
 
   async getPlatformStats(): Promise<MockPlatformStat | null> {
-    return prisma.mockPlatformStat.findFirst();
+    const stats = await prisma.mockPlatformStat.findFirst();
+    // Backward compatible: return the raw stats (Decimal will be serialized as string by Prisma)
+    return stats;
   }
 }
 

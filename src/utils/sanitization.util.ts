@@ -1,6 +1,9 @@
 /**
  * Content sanitization utilities for chat and user-generated content
  * Protects against XSS, injection attacks, and content policy violations
+ *
+ * Issue #849: Chat length server-side filter hook with pluggable sanitize.
+ * The sanitization pipeline is extensible via SanitizeHook callbacks.
  */
 
 /**
@@ -14,6 +17,51 @@ const HTML_ENTITY_MAP: Record<string, string> = {
   "'": '&#39;',
   '/': '&#x2F;',
 };
+
+/**
+ * Pluggable sanitize hook type.
+ * Each hook receives the current content and can return:
+ * - A sanitized string (may be the same or modified)
+ * - An error to reject the content
+ *
+ * Hooks are executed in order; the output of one becomes the input of the next.
+ * This enables composing multiple sanitization strategies (XSS escape, profanity filter,
+ * spam detection, etc.) without coupling them together.
+ *
+ * @example
+ * const pipeline = createSanitizePipeline([
+ *   normalizeWhitespace,
+ *   escapeHtml,
+ *   filterProfanity,
+ * ]);
+ * const clean = pipeline(content);
+ */
+export type SanitizeHook = (content: string) => string | Error;
+
+/**
+ * Creates a pluggable sanitization pipeline from an array of hooks.
+ * Hooks run in order; the first hook to return an Error short-circuits the pipeline.
+ *
+ * @param hooks - Sanitization hooks to apply in sequence
+ * @returns A function that applies all hooks to content
+ *
+ * @example
+ * const sanitize = createSanitizePipeline([escapeHtml, normalizeWhitespace]);
+ * const result = sanitize('<script>alert("xss")</script>');
+ */
+export function createSanitizePipeline(hooks: SanitizeHook[]): (content: string) => string {
+  return (content: string): string => {
+    let current = content;
+    for (const hook of hooks) {
+      const result = hook(current);
+      if (result instanceof Error) {
+        throw result;
+      }
+      current = result;
+    }
+    return current;
+  };
+}
 
 /**
  * Escape HTML special characters to prevent XSS attacks
@@ -134,6 +182,65 @@ export function sanitizeChatContent(content: string): string {
 
   return sanitized;
 }
+
+/**
+ * Default chat sanitization pipeline (issue #849).
+ *
+ * This is the recommended starting point for chat content sanitization.
+ * It can be extended by creating a custom pipeline with additional hooks.
+ *
+ * @example
+ * // Use the default pipeline
+ * const sanitized = defaultChatSanitizePipeline(content);
+ *
+ * @example
+ * // Create a custom pipeline with additional hooks
+ * const customPipeline = createSanitizePipeline([
+ *   ...defaultChatSanitizeHooks,
+ *   myCustomHook,
+ * ]);
+ */
+export const defaultChatSanitizePipeline = createSanitizePipeline([
+  (content) => {
+    if (!content || typeof content !== 'string') {
+      throw new Error('Content must be a non-empty string');
+    }
+    return content;
+  },
+  normalizeWhitespace,
+  (content) => {
+    if (content.trim().length === 0) {
+      throw new Error('Content cannot be empty or whitespace-only');
+    }
+    return content;
+  },
+  (content) => content.replace(/\s+on\w+\s*=\s*(".*?"|'.*?'|[^\s>]*)/gi, ''),
+  escapeHtml,
+]);
+
+/**
+ * Default chat sanitization hooks for building custom pipelines (issue #849).
+ *
+ * These hooks can be composed with additional hooks to create custom
+ * sanitization strategies for different content types or policies.
+ */
+export const defaultChatSanitizeHooks: SanitizeHook[] = [
+  (content) => {
+    if (!content || typeof content !== 'string') {
+      throw new Error('Content must be a non-empty string');
+    }
+    return content;
+  },
+  normalizeWhitespace,
+  (content) => {
+    if (content.trim().length === 0) {
+      throw new Error('Content cannot be empty or whitespace-only');
+    }
+    return content;
+  },
+  (content) => content.replace(/\s+on\w+\s*=\s*(".*?"|'.*?'|[^\s>]*)/gi, ''),
+  escapeHtml,
+];
 
 /**
  * Validate content length against constraints
